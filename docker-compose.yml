@@ -1,0 +1,12 @@
+services:
+  doota:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      DATABASE_URL: sqlite:////app/data/doota.db
+    env_file:
+      - .env

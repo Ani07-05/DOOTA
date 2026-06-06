@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Doota — Gazette Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,600;9..144,700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper: #f2ece1;
+      --paper-deep: #e8dfd0;
+      --ink: #1c1915;
+      --ink-muted: #5c564c;
+      --ink-faint: #8a8276;
+      --saffron: #c45c26;
+      --saffron-light: #e8a07a;
+      --forest: #2a4d3f;
+      --forest-light: #3d6b58;
+      --rule: #c4b8a4;
+      --stamp: #8b2e2e;
+      --shadow: rgba(28, 25, 21, 0.12);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: "Newsreader", Georgia, serif;
+      font-size: 17px;
+      line-height: 1.55;
+      color: var(--ink);
+      background: var(--paper);
+      min-height: 100vh;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.3;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
+    }
+
+    .page { max-width: 1320px; margin: 0 auto; padding: 0 1.5rem 4rem; }
+
+    /* ── Masthead ─────────────────────────────────────── */
+    .masthead {
+      padding: 2rem 0 0;
+      border-bottom: 3px double var(--ink);
+      animation: rise 0.6s ease-out both;
+    }
+
+    .masthead-top {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 2rem;
+      flex-wrap: wrap;
+      padding-bottom: 1.5rem;
+    }
+
+    .brand-block { flex: 1; min-width: 200px; }
+
+    .edition-tag {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      margin-bottom: 0.4rem;
+    }
+
+    .logo {
+      font-family: "Fraunces", serif;
+      font-size: clamp(2.4rem, 5vw, 3.8rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 0.95;
+      color: var(--ink);
+    }
+
+    .logo span { color: var(--saffron); font-style: italic; font-weight: 300; }
+
+    .tagline {
+      margin-top: 0.5rem;
+      font-size: 0.95rem;
+      color: var(--ink-muted);
+      font-style: italic;
+    }
+
+    /* stats ribbon */
+    .stats-ribbon {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid var(--rule);
+    }
+
+    @media (max-width: 640px) { .stats-ribbon { grid-template-columns: repeat(2, 1fr); } }
+
+    .stat {
+      padding: 0.85rem 1rem;
+      border-right: 1px solid var(--rule);
+      text-align: center;
+    }
+    .stat:last-child { border-right: none; }
+
+    .stat-num {
+      font-family: "Fraunces", serif;
+      font-size: 1.6rem;
+      font-weight: 600;
+      color: var(--saffron);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.58rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      margin-top: 0.3rem;
+    }
+
+    /* ── Scan progress dossier ─────────────────────────── */
+    #scanPanel { display: none; margin: 1.25rem 0 0; }
+    #scanPanel.visible { display: block; }
+
+    .dossier {
+      background: var(--paper-deep);
+      border: 1px solid var(--rule);
+      border-left: 4px solid var(--stamp);
+      padding: 1rem 1.25rem;
+      position: relative;
+      animation: rise 0.35s ease-out both;
+    }
+
+    .dossier::before {
+      content: "SCAN IN PROGRESS";
+      position: absolute;
+      top: -0.5rem; left: 1rem;
+      background: var(--stamp);
+      color: var(--paper);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.52rem;
+      letter-spacing: 0.18em;
+      padding: 0.12rem 0.45rem;
+    }
+
+    .dossier.is-done::before { content: "SCAN COMPLETE"; background: var(--forest); }
+    .dossier.is-failed::before { content: "SCAN FAILED"; background: var(--stamp); }
+
+    .dossier-close {
+      position: absolute; top: 0.35rem; right: 0.6rem;
+      background: none; border: none;
+      font-size: 1rem; color: var(--ink-faint); cursor: pointer; padding: 0.1rem 0.3rem;
+    }
+    .dossier-close:hover { color: var(--ink); }
+
+    .dossier-head {
+      display: flex; justify-content: space-between;
+      align-items: baseline; gap: 1rem; margin-bottom: 0.6rem;
+    }
+
+    #scanStep { font-style: italic; color: var(--ink-muted); font-size: 0.9rem; }
+    #scanPct { font-family: "JetBrains Mono", monospace; font-size: 0.8rem; color: var(--stamp); }
+
+    .meter-track {
+      height: 5px;
+      background: repeating-linear-gradient(90deg, var(--rule) 0, var(--rule) 1px, transparent 1px, transparent 8px);
+      overflow: hidden;
+    }
+
+    .meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--forest), var(--saffron));
+      width: 0%; transition: width 0.5s cubic-bezier(0.22,1,0.36,1);
+    }
+
+    #scanMeta {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.62rem; color: var(--ink-faint);
+      margin-top: 0.5rem; letter-spacing: 0.04em;
+    }
+
+    /* ── Main layout ──────────────────────────────────── */
+    .layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 0;
+      margin-top: 1.75rem;
+      border: 1px solid var(--rule);
+      animation: rise 0.6s 0.15s ease-out both;
+    }
+
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+    /* ── Ministry column ──────────────────────────────── */
+    .index-col {
+      border-right: 1px solid var(--rule);
+      display: flex;
+      flex-direction: column;
+    }
+
+    @media (max-width: 900px) {
+      .index-col { border-right: none; border-bottom: 1px solid var(--rule); max-height: 340px; }
+    }
+
+    .index-header {
+      padding: 0.9rem 1rem 0;
+      border-bottom: 1px solid var(--rule);
+      background: var(--paper-deep);
+    }
+
+    .index-header-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 0.6rem; gap: 0.5rem;
+    }
+
+    .col-title {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.6rem; letter-spacing: 0.2em;
+      text-transform: uppercase; color: var(--ink-faint);
+    }
+
+    .ministry-count-badge {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.58rem; color: var(--forest);
+    }
+
+    .search-wrap { position: relative; margin-bottom: 0.6rem; }
+
+    .search-input {
+      width: 100%;
+      font-family: "Newsreader", serif;
+      font-size: 0.88rem;
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      color: var(--ink);
+      padding: 0.4rem 0.6rem 0.4rem 1.8rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .search-input:focus { border-color: var(--forest); }
+    .search-input::placeholder { color: var(--ink-faint); font-style: italic; }
+
+    .search-icon {
+      position: absolute; left: 0.55rem; top: 50%; transform: translateY(-50%);
+      font-size: 0.75rem; color: var(--ink-faint); pointer-events: none;
+    }
+
+    .bulk-actions {
+      display: flex; gap: 0.5rem; align-items: center;
+      padding: 0.5rem 1rem;
+      border-bottom: 1px solid var(--rule);
+      background: var(--paper-deep);
+      flex-wrap: wrap;
+    }
+
+    .bulk-btn {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.56rem; letter-spacing: 0.1em; text-transform: uppercase;
+      background: none; border: 1px solid var(--rule);
+      color: var(--ink-muted); padding: 0.2rem 0.45rem; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .bulk-btn:hover { border-color: var(--saffron); color: var(--saffron); }
+
+    .bulk-scan-btn {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.56rem; letter-spacing: 0.1em; text-transform: uppercase;
+      background: var(--ink); color: var(--paper);
+      border: none; padding: 0.25rem 0.6rem; cursor: pointer;
+      margin-left: auto; transition: background 0.15s;
+    }
+    .bulk-scan-btn:hover:not(:disabled) { background: var(--forest); }
+    .bulk-scan-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .selected-count {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.56rem; color: var(--forest);
+    }
+
+    .ministry-list {
+      list-style: none;
+      flex: 1; overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--rule) transparent;
+    }
+    .ministry-list::-webkit-scrollbar { width: 3px; }
+    .ministry-list::-webkit-scrollbar-thumb { background: var(--rule); }
+
+    .ministry-item {
+      display: grid;
+      grid-template-columns: 1.5rem 1fr auto;
+      gap: 0.4rem;
+      align-items: center;
+      padding: 0.55rem 1rem;
+      border-bottom: 1px solid rgba(196,184,164,0.4);
+      cursor: pointer;
+      transition: background 0.12s;
+      user-select: none;
+    }
+
+    .ministry-item:hover { background: rgba(196,92,38,0.04); }
+    .ministry-item.scan-selected { background: rgba(196,92,38,0.06); }
+    .ministry-item.viewing {
+      background: rgba(42,77,63,0.09);
+      border-left: 3px solid var(--forest);
+      padding-left: calc(1rem - 2px);
+    }
+
+    .ministry-check {
+      accent-color: var(--forest); cursor: pointer;
+      width: 13px; height: 13px; flex-shrink: 0;
+    }
+
+    .ministry-info { min-width: 0; }
+
+    .ministry-name {
+      font-size: 0.82rem; line-height: 1.3;
+      color: var(--ink); display: block;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .ministry-item.viewing .ministry-name { font-weight: 600; color: var(--forest); }
+
+    .ministry-sub {
+      display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.1rem;
+    }
+
+    .pill {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.52rem; letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 0.08rem 0.3rem; border: 1px solid;
+    }
+    .pill-count { color: var(--saffron); border-color: var(--saffron-light); }
+    .pill-rss { color: var(--forest); border-color: var(--forest-light); background: rgba(42,77,63,0.06); }
+    .pill-date { color: var(--ink-faint); border-color: transparent; font-style: italic; text-transform: none; letter-spacing: 0; font-size: 0.6rem; }
+
+    .ministry-arrow { color: var(--ink-faint); font-size: 0.7rem; }
+    .ministry-item.viewing .ministry-arrow { color: var(--forest); }
+
+    .no-results {
+      padding: 2rem 1rem; text-align: center;
+      font-style: italic; color: var(--ink-faint); font-size: 0.85rem;
+    }
+
+    /* ── Feed column ──────────────────────────────────── */
+    .feed-col { display: flex; flex-direction: column; min-height: 500px; }
+
+    .feed-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--rule);
+      background: var(--paper-deep);
+      display: flex; align-items: center;
+      justify-content: space-between; gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .feed-title {
+      font-family: "Fraunces", serif;
+      font-size: 1.3rem; font-weight: 600;
+      line-height: 1.2; flex: 1;
+    }
+
+    .feed-actions { display: flex; gap: 0.6rem; align-items: center; flex-shrink: 0; }
+
+    .feed-scan-btn {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase;
+      background: var(--saffron); color: var(--paper);
+      border: none; padding: 0.5rem 0.9rem; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .feed-scan-btn:hover:not(:disabled) { background: var(--stamp); }
+    .feed-scan-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .feed-scan-btn.hidden { display: none; }
+
+    .feed-source-link {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.6rem; color: var(--forest);
+      text-decoration: none; border-bottom: 1px solid var(--forest-light);
+      white-space: nowrap;
+    }
+    .feed-source-link:hover { color: var(--saffron); border-color: var(--saffron); }
+    .feed-source-link.hidden { display: none; }
+
+    .feed-body { padding: 1.25rem 1.5rem; flex: 1; }
+
+    .circular-list { display: flex; flex-direction: column; gap: 1rem; }
+
+    .circular-card {
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      padding: 1.1rem 1.25rem 1.1rem 1.5rem;
+      position: relative;
+      box-shadow: 2px 2px 0 var(--shadow);
+      transition: transform 0.18s, box-shadow 0.18s;
+      animation: cardIn 0.4s ease-out both;
+    }
+
+    .circular-card:nth-child(1) { animation-delay: 0.04s; }
+    .circular-card:nth-child(2) { animation-delay: 0.08s; }
+    .circular-card:nth-child(3) { animation-delay: 0.12s; }
+    .circular-card:nth-child(4) { animation-delay: 0.16s; }
+    .circular-card:nth-child(5) { animation-delay: 0.20s; }
+
+    .circular-card:hover { transform: translate(-2px,-2px); box-shadow: 4px 4px 0 var(--shadow); }
+
+    .circular-card::before {
+      content: "";
+      position: absolute; left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: linear-gradient(180deg, var(--saffron), var(--forest));
+    }
+
+    .card-top {
+      display: flex; justify-content: space-between;
+      align-items: flex-start; gap: 0.75rem;
+    }
+
+    .card-title {
+      font-family: "Fraunces", serif;
+      font-size: 1.05rem; font-weight: 600;
+      line-height: 1.3; color: var(--ink); flex: 1;
+    }
+
+    .card-source {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--forest); text-decoration: none;
+      border-bottom: 1px solid var(--forest-light);
+      white-space: nowrap; flex-shrink: 0;
+      transition: color 0.12s;
+    }
+    .card-source:hover { color: var(--saffron); border-color: var(--saffron); }
+
+    .card-summary {
+      margin-top: 0.65rem; font-size: 0.9rem; color: var(--ink-muted);
+      border-top: 1px solid var(--rule); padding-top: 0.65rem;
+      line-height: 1.5;
+    }
+
+    .card-footer {
+      margin-top: 0.6rem;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.58rem; color: var(--ink-faint); letter-spacing: 0.04em;
+    }
+
+    /* Empty / landing states */
+    .landing-state {
+      padding: 3rem 1.5rem; text-align: center;
+    }
+
+    .landing-icon {
+      font-family: "Fraunces", serif; font-size: 2.5rem;
+      color: var(--rule); line-height: 1; margin-bottom: 1rem;
+    }
+
+    .landing-state h3 {
+      font-family: "Fraunces", serif; font-size: 1.25rem;
+      color: var(--ink-muted); font-weight: 400; margin-bottom: 0.5rem;
+    }
+
+    .landing-state p { font-size: 0.9rem; color: var(--ink-faint); font-style: italic; max-width: 26rem; margin: 0 auto; }
+
+    .empty-state {
+      text-align: center; padding: 2.5rem 1rem;
+      border: 2px dashed var(--rule);
+    }
+
+    .empty-state p { color: var(--ink-muted); font-style: italic; }
+    .empty-state strong { font-style: normal; color: var(--saffron); font-weight: 500; }
+
+    /* Top-right toolbar */
+    .toolbar {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem;
+      flex-shrink: 0;
+    }
+
+    .toolbar-btn {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase;
+      border: 1px solid var(--rule); background: none;
+      color: var(--ink-muted); padding: 0.45rem 0.85rem; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .toolbar-btn:hover { border-color: var(--forest); color: var(--forest); }
+    .toolbar-btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+    .toolbar-btn.primary:hover:not(:disabled) { background: var(--forest); border-color: var(--forest); }
+    .toolbar-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .toolbar-hint {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.58rem; color: var(--ink-faint); text-align: right;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateX(-6px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="masthead">
+      <div class="masthead-top">
+        <div class="brand-block">
+          <p class="edition-tag">Union Government · Circular Intelligence</p>
+          <h1 class="logo">Doo<span>ta</span></h1>
+          <p class="tagline">Official circulars from every active Indian ministry — nothing else.</p>
+        </div>
+        <div class="toolbar">
+          <button id="refreshBtn" class="toolbar-btn">Sync Ministry List</button>
+          <span class="toolbar-hint" id="refreshMsg"></span>
+        </div>
+      </div>
+
+      <div class="stats-ribbon">
+        <div class="stat">
+          <div class="stat-num">{{ ministries|length }}</div>
+          <div class="stat-label">Active Ministries</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num" id="statCirculars">{{ total_circulars }}</div>
+          <div class="stat-label">Circulars Saved</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num">{{ rss_count }}</div>
+          <div class="stat-label">RSS Feeds</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num">{% if latest_scan %}{{ latest_scan.new_circulars }}{% else %}—{% endif %}</div>
+          <div class="stat-label">Found Last Scan</div>
+        </div>
+      </div>
+    </header>
+
+    <div id="scanPanel">
+      <div class="dossier">
+        <button type="button" id="closePanel" class="dossier-close" title="Dismiss">×</button>
+        <div class="dossier-head">
+          <p id="scanStep">Starting scan…</p>
+          <p id="scanPct">0%</p>
+        </div>
+        <div class="meter-track">
+          <div id="scanBar" class="meter-fill"></div>
+        </div>
+        <p id="scanMeta"></p>
+      </div>
+    </div>
+
+    <div class="layout">
+      <!-- Ministry list -->
+      <aside class="index-col">
+        <div class="index-header">
+          <div class="index-header-row">
+            <span class="col-title">Ministries</span>
+            <span class="ministry-count-badge" id="ministryCount">{{ ministries|length }} active</span>
+          </div>
+          <div class="search-wrap">
+            <span class="search-icon">⌕</span>
+            <input type="search" class="search-input" id="ministrySearch" placeholder="Filter ministries…" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="bulk-actions">
+          <button type="button" class="bulk-btn" id="selectAllBtn">Tick all</button>
+          <button type="button" class="bulk-btn" id="clearAllBtn">Clear</button>
+          <span class="selected-count" id="selectedCount"></span>
+          <button type="button" class="bulk-scan-btn" id="scanBtn" disabled>Scan Selected</button>
+        </div>
+
+        <ol class="ministry-list" id="ministryList">
+          {% for m in ministries %}
+          <li class="ministry-item" data-id="{{ m.id }}" data-name="{{ m.name }}" data-url="{{ m.official_url or '' }}" data-search="{{ m.name|lower }}{% if m.abbreviation %} {{ m.abbreviation|lower }}{% endif %}">
+            <input type="checkbox" class="ministry-check" value="{{ m.id }}" id="m{{ m.id }}" onclick="event.stopPropagation()" />
+            <div class="ministry-info">
+              <span class="ministry-name">{{ m.name }}</span>
+              <div class="ministry-sub">
+                {% set cc = circular_counts.get(m.id, 0) %}
+                {% if cc %}<span class="pill pill-count">{{ cc }}</span>{% endif %}
+                {% if m.has_rss_feed %}<span class="pill pill-rss">RSS</span>{% endif %}
+                {% if m.last_scraped_at %}<span class="pill pill-date">{{ m.last_scraped_at.strftime('%d %b') }}</span>{% endif %}
+              </div>
+            </div>
+            <span class="ministry-arrow">›</span>
+          </li>
+          {% endfor %}
+        </ol>
+      </aside>
+
+      <!-- Feed -->
+      <section class="feed-col">
+        <div class="feed-header">
+          <h2 class="feed-title" id="feedTitle">All Recent Circulars</h2>
+          <div class="feed-actions">
+            <a class="feed-source-link hidden" id="feedSourceLink" href="#" target="_blank" rel="noopener">Official Site ↗</a>
+            <button class="feed-scan-btn hidden" id="feedScanBtn">Scan this ministry</button>
+          </div>
+        </div>
+        <div class="feed-body">
+          <div class="circular-list" id="circularFeed">
+            <div class="landing-state">
+              <div class="landing-icon">§</div>
+              <h3>Select a ministry to view its circulars</h3>
+              <p>Or tick ministries and press <em>Scan Selected</em> to fetch new ones.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer style="margin-top:2rem;padding-top:0.75rem;border-top:1px solid var(--rule);font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--ink-faint);letter-spacing:0.1em;text-align:center;">
+      DOOTA · CIRCULARS ONLY · NO PRESS RELEASES · DATA FROM IGOD.GOV.IN
+    </footer>
+  </div>
+
+  <script>
+    const scanBtn       = document.getElementById('scanBtn');
+    const feedScanBtn   = document.getElementById('feedScanBtn');
+    const feedSourceLink= document.getElementById('feedSourceLink');
+    const refreshBtn    = document.getElementById('refreshBtn');
+    const refreshMsg    = document.getElementById('refreshMsg');
+    const panel         = document.getElementById('scanPanel');
+    const dossier       = document.querySelector('.dossier');
+    const bar           = document.getElementById('scanBar');
+    const stepEl        = document.getElementById('scanStep');
+    const pctEl         = document.getElementById('scanPct');
+    const metaEl        = document.getElementById('scanMeta');
+    const selectedCount = document.getElementById('selectedCount');
+    const feedTitle     = document.getElementById('feedTitle');
+    const ministrySearch= document.getElementById('ministrySearch');
+    const ministryCount = document.getElementById('ministryCount');
+    const recentLimit   = {{ recent_limit }};
+
+    let pollTimer = null;
+    let viewingMinistryId   = null;
+    let viewingMinistryName = '';
+    let viewingMinistryUrl  = '';
+    let scanning = false;
+
+    // ── Ministry list interactions ───────────────────────
+    function getChecks() { return [...document.querySelectorAll('.ministry-check')]; }
+
+    function getSelectedIds() {
+      return getChecks().filter(c => c.checked).map(c => parseInt(c.value, 10));
+    }
+
+    function updateSelection() {
+      const ids = getSelectedIds();
+      scanBtn.disabled = ids.length === 0 || scanning;
+      selectedCount.textContent = ids.length ? ids.length + ' selected' : '';
+      document.querySelectorAll('.ministry-item').forEach(row => {
+        const cb = row.querySelector('.ministry-check');
+        row.classList.toggle('scan-selected', cb && cb.checked);
+      });
+    }
+
+    function setViewingMinistry(row) {
+      const id    = parseInt(row.dataset.id, 10);
+      const name  = row.dataset.name || '';
+      const url   = row.dataset.url  || '';
+      viewingMinistryId   = id;
+      viewingMinistryName = name;
+      viewingMinistryUrl  = url;
+
+      document.querySelectorAll('.ministry-item').forEach(r => r.classList.toggle('viewing', r === row));
+      feedTitle.textContent = name;
+
+      feedScanBtn.classList.toggle('hidden', false);
+      feedScanBtn.disabled = scanning;
+
+      if (url) {
+        feedSourceLink.href = url;
+        feedSourceLink.classList.remove('hidden');
+      } else {
+        feedSourceLink.classList.add('hidden');
+      }
+
+      loadMinistryCirculars(id);
+    }
+
+    // Row click = view circulars; checkbox click = select for scan
+    document.querySelectorAll('.ministry-item').forEach(row => {
+      row.addEventListener('click', e => {
+        if (e.target.classList.contains('ministry-check')) return;
+        setViewingMinistry(row);
+      });
+    });
+
+    getChecks().forEach(cb => cb.addEventListener('change', updateSelection));
+
+    document.getElementById('selectAllBtn').addEventListener('click', () => {
+      document.querySelectorAll('.ministry-item:not(.hidden-filter) .ministry-check').forEach(c => c.checked = true);
+      updateSelection();
+    });
+    document.getElementById('clearAllBtn').addEventListener('click', () => {
+      getChecks().forEach(c => c.checked = false);
+      updateSelection();
+    });
+
+    // ── Search / filter ──────────────────────────────────
+    ministrySearch.addEventListener('input', () => {
+      const q = ministrySearch.value.trim().toLowerCase();
+      let visible = 0;
+      document.querySelectorAll('.ministry-item').forEach(row => {
+        const match = !q || row.dataset.search.includes(q);
+        row.style.display = match ? '' : 'none';
+        if (match) visible++;
+      });
+      ministryCount.textContent = q ? `${visible} of {{ ministries|length }}` : '{{ ministries|length }} active';
+      document.getElementById('noResults') && document.getElementById('noResults').remove();
+      if (visible === 0) {
+        const li = document.createElement('li');
+        li.id = 'noResults';
+        li.className = 'no-results';
+        li.textContent = 'No ministries match "' + ministrySearch.value + '"';
+        document.getElementById('ministryList').appendChild(li);
+      }
+    });
+
+    // ── Scan panel ───────────────────────────────────────
+    document.getElementById('closePanel').addEventListener('click', () => {
+      panel.classList.remove('visible');
+      dossier.classList.remove('is-done', 'is-failed');
+    });
+
+    function showProgress(data) {
+      panel.classList.add('visible');
+      const progress = data.progress || 0;
+      bar.style.width = progress + '%';
+      pctEl.textContent = progress + '%';
+      stepEl.textContent = data.step || 'Working…';
+      const found = data.new_circulars || 0;
+      const processed = data.processed || 0;
+      const total = data.total || 0;
+      if (total > 0) metaEl.textContent = `${processed} of ${total} ministries scanned · ${found} new circulars found`;
+    }
+
+    async function pollProgress() {
+      try {
+        const res  = await fetch('/api/progress');
+        if (!res.ok) throw new Error(res.status);
+        const data = await res.json();
+        showProgress(data);
+
+        if (data.running) {
+          pollTimer = setTimeout(pollProgress, 2000);
+        } else if (data.status === 'completed') {
+          stepEl.textContent = 'Scan complete — ' + (data.new_circulars || 0) + ' new circulars found';
+          bar.style.width = '100%';
+          pctEl.textContent = '100%';
+          dossier.classList.add('is-done');
+          scanning = false;
+          feedScanBtn.disabled = false;
+          scanBtn.disabled = getSelectedIds().length === 0;
+          scanBtn.textContent = 'Scan Selected';
+          feedScanBtn.textContent = 'Scan this ministry';
+          if (viewingMinistryId) loadMinistryCirculars(viewingMinistryId);
+          setTimeout(() => { panel.classList.remove('visible'); dossier.classList.remove('is-done'); }, 5000);
+        } else if (data.status === 'failed') {
+          stepEl.textContent = 'Scan failed: ' + (data.message || 'unknown error');
+          dossier.classList.add('is-failed');
+          scanning = false;
+          feedScanBtn.disabled = false;
+          scanBtn.disabled = getSelectedIds().length === 0;
+          scanBtn.textContent = 'Scan Selected';
+          feedScanBtn.textContent = 'Scan this ministry';
+        }
+      } catch (e) {
+        stepEl.textContent = 'Connection lost — check server';
+        scanning = false;
+      }
+    }
+
+    async function startScan(ids) {
+      if (!ids.length || scanning) return;
+      scanning = true;
+      scanBtn.disabled = true;
+      scanBtn.textContent = 'Scanning…';
+      feedScanBtn.disabled = true;
+      feedScanBtn.textContent = 'Scanning…';
+      dossier.classList.remove('is-done', 'is-failed');
+      showProgress({ progress: 0, step: 'Starting scan…', processed: 0, total: ids.length, new_circulars: 0 });
+
+      try {
+        const res = await fetch('/api/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ministry_ids: ids }),
+        });
+        const data = await res.json();
+        if (data.status === 'already_running') { stepEl.textContent = data.message; }
+        if (!res.ok) throw new Error(data.detail || data.message || 'Scan failed');
+        pollProgress();
+      } catch (e) {
+        stepEl.textContent = 'Failed to start: ' + e.message;
+        scanning = false;
+        scanBtn.disabled = false;
+        scanBtn.textContent = 'Scan Selected';
+        feedScanBtn.disabled = false;
+        feedScanBtn.textContent = 'Scan this ministry';
+      }
+    }
+
+    scanBtn.addEventListener('click', () => startScan(getSelectedIds()));
+
+    feedScanBtn.addEventListener('click', () => {
+      if (viewingMinistryId) startScan([viewingMinistryId]);
+    });
+
+    // ── Refresh ministry list ─────────────────────────────
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = 'Syncing…';
+      refreshMsg.textContent = '';
+      try {
+        const res  = await fetch('/api/refresh-ministries', { method: 'POST' });
+        const data = await res.json();
+        refreshMsg.textContent = data.message || 'Done';
+        setTimeout(() => location.reload(), 1200);
+      } catch (e) {
+        refreshMsg.textContent = 'Failed: ' + e.message;
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = 'Sync Ministry List';
+      }
+    });
+
+    // ── Circular loading ─────────────────────────────────
+    function cleanSummary(text) {
+      if (!text) return '';
+      const t = text.trim();
+      if (t.startsWith('{')) {
+        try {
+          const j = JSON.parse(t);
+          const s = (j.summary || j.impact || '').trim();
+          if (s) return s.slice(0, 420);
+        } catch (_) {}
+        const m = t.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)/);
+        if (m) return m[1].replace(/\\n/g, ' ').slice(0, 420);
+      }
+      const kv = t.match(/summary\s*[:\-]\s*"?(.{30,}?)(?:\n\w|"?\s*,?\s*\n|$)/i);
+      if (kv) return kv[1].replace(/[{}"]/g, '').trim().slice(0, 420);
+      return t.length > 420 ? t.slice(0, 420) + '…' : t;
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      return d.toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+    }
+
+    function esc(str) {
+      return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function renderCirculars(items) {
+      const feed = document.getElementById('circularFeed');
+      if (!items.length) {
+        feed.innerHTML = `
+          <div class="empty-state">
+            <p>No circulars saved for <strong>${esc(viewingMinistryName)}</strong> yet.<br>
+            Press <strong>Scan this ministry</strong> above to fetch them.</p>
+          </div>`;
+        return;
+      }
+      feed.innerHTML = items.map(c => `
+        <article class="circular-card">
+          <div class="card-top">
+            <h3 class="card-title">${esc(c.title)}</h3>
+            <a class="card-source" href="${esc(c.source_url)}" target="_blank" rel="noopener">View Source</a>
+          </div>
+          ${c.summary ? `<p class="card-summary">${esc(cleanSummary(c.summary))}</p>` : ''}
+          <p class="card-footer">
+            ${c.published_date ? 'Released ' + esc(c.published_date) : 'Discovered ' + formatDate(c.discovered_at)}
+          </p>
+        </article>
+      `).join('');
+    }
+
+    async function loadMinistryCirculars(ministryId) {
+      const feed = document.getElementById('circularFeed');
+      feed.innerHTML = `<div class="landing-state"><div class="landing-icon">…</div><h3>Loading…</h3></div>`;
+      try {
+        const res  = await fetch(`/api/circulars?ministry_id=${ministryId}&page_size=${recentLimit}&days=3650`);
+        const data = await res.json();
+        renderCirculars(data.items || []);
+      } catch (e) {
+        feed.innerHTML = `<div class="empty-state"><p>Failed to load — refresh the page.</p></div>`;
+      }
+    }
+
+    updateSelection();
+  </script>
+</body>
+</html>
