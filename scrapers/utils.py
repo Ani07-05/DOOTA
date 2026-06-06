@@ -215,6 +215,68 @@ KNOWN_CIRCULAR_PAGES: dict[str, str] = {
         "https://tourism.gov.in/circulars",
     "Youth Affairs":
         "https://yas.gov.in/",
+
+    # ── Space, Defence R&D, Security ─────────────────────────────────────────
+    "Space":
+        "https://www.dos.gov.in/",
+    "Defence Research":
+        "https://www.drdo.gov.in/whats-new",
+    "Ex-Servicemen":
+        "https://desw.gov.in/",
+    "Border Management":
+        "https://www.mha.gov.in/en/notifications/circular",
+    "Internal Security":
+        "https://www.mha.gov.in/en/notifications/circular",
+    "Jammu":
+        "https://jkaffairs.gov.in/",
+
+    # ── North East & Special Regions ─────────────────────────────────────────
+    "North Eastern":
+        "https://mdoner.gov.in/",
+    "North East":
+        "https://mdoner.gov.in/",
+    "Coordination":
+        "https://cabsec.gov.in/",
+    "Cabinet":
+        "https://cabsec.gov.in/",
+
+    # ── Disaster, Finance adjacent ────────────────────────────────────────────
+    "Disaster Management":
+        "https://ndma.gov.in/",
+    "Pension Fund":
+        "https://pfrda.org.in/",
+    "Insurance":
+        "https://irdai.gov.in/circulars",
+    "Disinvestment":
+        "https://dipam.gov.in/",
+
+    # ── Shipping / Logistics ──────────────────────────────────────────────────
+    "Logistics":
+        "https://logistics.gov.in/",
+    "Inland Waterways":
+        "https://iwai.nic.in/",
+
+    # ── Social ────────────────────────────────────────────────────────────────
+    "Transgender":
+        "https://socialjustice.gov.in/common/1250",
+    "Differently Abled":
+        "https://depwd.gov.in/en/circulars/",
+    "Overseas Indian":
+        "https://www.mea.gov.in/circulars-notifications.htm",
+
+    # ── Misc ──────────────────────────────────────────────────────────────────
+    "Printing":
+        "https://deptofpublications.gov.in/",
+    "Stationery":
+        "https://deptofpublications.gov.in/",
+    "Sugar":
+        "https://dfpd.gov.in/",
+    "Shipping and Navigation":
+        "https://www.shipmin.gov.in/orders/circulars",
+    "Narcotic":
+        "https://narcoticsindia.nic.in/",
+    "Economic Intelligence":
+        "https://dor.gov.in/office-circulars",
 }
 
 
