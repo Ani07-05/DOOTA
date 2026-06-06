@@ -1,131 +1,91 @@
 import logging
-import re
 
-import requests
-from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session
 
 from database.models import Ministry
-from scrapers.utils import KNOWN_CIRCULAR_PAGES, clean_name, extract_abbreviation, normalize_url
 
 logger = logging.getLogger(__name__)
 
-IGOD_BASE = "https://igod.gov.in"
-CATEGORIES_URL = f"{IGOD_BASE}/ug/categories"
-
-HEADERS = {
-    "User-Agent": "DootaBot/1.0 (+https://github.com/doota; legal government circular monitor)",
-}
-
-
-def _fetch_html(url: str) -> str:
-    response = requests.get(url, headers=HEADERS, timeout=30)
-    response.raise_for_status()
-    return response.text
-
-
-def _parse_categories_page(html: str) -> list[dict[str, str]]:
-    soup = BeautifulSoup(html, "html.parser")
-    results: list[dict[str, str]] = []
-    seen_urls: set[str] = set()
-
-    for row in soup.select("div.search-result-row"):
-        title_link = row.select_one("a.search-title")
-        detail_link = row.select_one("a.btn-detail, a[href*='/organization/']")
-        if not title_link or not detail_link:
-            continue
-
-        name = clean_name(title_link.get_text(" ", strip=True))
-        if not name or len(name) < 8:
-            continue
-
-        igod_url = normalize_url(IGOD_BASE, detail_link["href"])
-        if not igod_url or igod_url in seen_urls:
-            continue
-
-        official_url = title_link.get("href", "").strip()
-        if official_url and not official_url.startswith("http"):
-            official_url = None
-        if official_url and "igod.gov.in" in official_url:
-            official_url = None
-
-        org_type = "ministry" if name.startswith("Ministry") else "department"
-        seen_urls.add(igod_url)
-        results.append(
-            {
-                "name": name,
-                "abbreviation": extract_abbreviation(name),
-                "igod_url": igod_url,
-                "official_url": official_url,
-                "org_type": org_type,
-            }
-        )
-
-    return results
-
-
-def _extract_official_url_from_detail(igod_url: str) -> str | None:
-    try:
-        html = _fetch_html(igod_url)
-    except requests.RequestException as exc:
-        logger.warning("Failed to fetch igod detail %s: %s", igod_url, exc)
-        return None
-
-    soup = BeautifulSoup(html, "html.parser")
-    for label in soup.find_all(string=re.compile(r"website", re.I)):
-        parent = label.find_parent()
-        if not parent:
-            continue
-        link = parent.find("a", href=True)
-        if link and link["href"].startswith("http") and "igod.gov.in" not in link["href"]:
-            return link["href"].strip()
-    return None
-
-
-def discover_organizations() -> list[dict[str, str]]:
-    return _parse_categories_page(_fetch_html(CATEGORIES_URL))
-
-
-def _has_known_circular_url(name: str) -> bool:
-    name_lower = name.lower()
-    return any(key.lower() in name_lower for key in KNOWN_CIRCULAR_PAGES)
+# Exact 47 ministries/departments with confirmed circular URLs.
+# (name, abbreviation, org_type, official_url)
+STATIC_MINISTRIES: list[tuple[str, str, str, str]] = [
+    ("Department of Administrative Reforms and Public Grievances", "DARPG", "department", "https://darpg.gov.in"),
+    ("Department of Agricultural Research and Education", "DARE", "department", "https://icar.gov.in"),
+    ("Department of Animal Husbandry and Dairying", "DAHD", "department", "https://www.dahd.gov.in"),
+    ("Department of Atomic Energy", "DAE", "department", "https://dae.gov.in"),
+    ("Department of Chemicals and Petrochemicals", "DCP", "department", "https://chemicals.gov.in"),
+    ("Department of Consumer Affairs", "DoCA", "department", "https://consumeraffairs.gov.in"),
+    ("Department of Defence", "DoD", "department", "https://www.mod.gov.in"),
+    ("Department of Defence Production", "DDP", "department", "https://www.ddpmod.gov.in"),
+    ("Department of Defence Research and Development", "DRDO", "department", "https://www.drdo.gov.in"),
+    ("Department of Economic Affairs", "DEA", "department", "https://dea.gov.in"),
+    ("Department of Empowerment of Persons with Disabilities", "DEPwD", "department", "https://depwd.gov.in"),
+    ("Department of Fertilizers", "DoFz", "department", "https://www.fert.gov.in"),
+    ("Department of Food and Public Distribution", "DFPD", "department", "https://dfpd.gov.in"),
+    ("Department of Investment and Public Asset Management", "DIPAM", "department", "https://dipam.gov.in"),
+    ("Department of Land Resources", "DLR", "department", "https://dolr.gov.in"),
+    ("Department of Official Language", "DOL", "department", "https://rajbhasha.gov.in"),
+    ("Department of Personnel and Training", "DoPT", "department", "https://dopt.gov.in"),
+    ("Department of Posts", "DoP", "department", "https://www.indiapost.gov.in"),
+    ("Department of Revenue", "DoR", "department", "https://dor.gov.in"),
+    ("Department of Science and Technology", "DST", "department", "https://dst.gov.in"),
+    ("Department of Social Justice and Empowerment", "DSJE", "department", "https://socialjustice.gov.in"),
+    ("Department of Sports", "DoS", "department", "https://www.yas.nic.in"),
+    ("Department of Water Resources, River Development and Ganga Rejuvenation", "DWRDGR", "department", "https://cwc.gov.in"),
+    ("Department of Youth Affairs", "DoYA", "department", "https://yas.gov.in"),
+    ("Ministry of Chemicals and Fertilizers", "MoCF", "ministry", "https://chemicals.gov.in"),
+    ("Ministry of Civil Aviation", "MoCA", "ministry", "https://www.civilaviation.gov.in"),
+    ("Ministry of Coal", "MoC", "ministry", "https://coal.gov.in"),
+    ("Ministry of Cooperation", "MoCoop", "ministry", "https://cooperation.gov.in"),
+    ("Ministry of Defence", "MoD", "ministry", "https://www.mod.gov.in"),
+    ("Ministry of Environment, Forest and Climate Change", "MoEFCC", "ministry", "https://moef.gov.in"),
+    ("Ministry of External Affairs", "MEA", "ministry", "https://www.mea.gov.in"),
+    ("Ministry of Food Processing Industries", "MoFPI", "ministry", "https://www.mofpi.gov.in"),
+    ("Ministry of Heavy Industries", "MoHI", "ministry", "https://heavyindustries.gov.in"),
+    ("Ministry of Home Affairs", "MHA", "ministry", "https://www.mha.gov.in"),
+    ("Ministry of Information and Broadcasting", "MIB", "ministry", "https://mib.gov.in"),
+    ("Ministry of Jal Shakti", "MoJS", "ministry", "https://jalshakti.gov.in"),
+    ("Ministry of Micro, Small and Medium Enterprises", "MoMSME", "ministry", "https://msme.gov.in"),
+    ("Ministry of Minority Affairs", "MoMA", "ministry", "https://www.minorityaffairs.gov.in"),
+    ("Ministry of New and Renewable Energy", "MNRE", "ministry", "https://mnre.gov.in"),
+    ("Ministry of Panchayati Raj", "MoPR", "ministry", "https://panchayat.gov.in"),
+    ("Ministry of Ports, Shipping and Waterways", "MoPSW", "ministry", "https://www.shipmin.gov.in"),
+    ("Ministry of Railways", "MoR", "ministry", "https://indianrailways.gov.in"),
+    ("Ministry of Science and Technology", "MoST", "ministry", "https://dst.gov.in"),
+    ("Ministry of Steel", "MoS", "ministry", "https://steel.gov.in"),
+    ("Ministry of Tourism", "MoT", "ministry", "https://tourism.gov.in"),
+    ("Ministry of Tribal Affairs", "MoTA", "ministry", "https://tribal.gov.in"),
+    ("Ministry of Youth Affairs and Sports", "MoYAS", "ministry", "https://yas.gov.in"),
+]
 
 
 def refresh_ministries(db: Session) -> int:
-    organizations = discover_organizations()
+    static_names = {entry[0] for entry in STATIC_MINISTRIES}
 
-    # Deactivate any existing ministries that no longer have a known circular URL
+    # Deactivate anything not in the static list
     for ministry in db.query(Ministry).filter(Ministry.is_active.is_(True)).all():
-        if not _has_known_circular_url(ministry.name):
+        if ministry.name not in static_names:
             ministry.is_active = False
     db.commit()
 
     updated = 0
-    for org in organizations:
-        if not _has_known_circular_url(org["name"]):
-            continue
-
-        existing = db.query(Ministry).filter(Ministry.igod_url == org["igod_url"]).first()
-        official_url = org.get("official_url") or _extract_official_url_from_detail(org["igod_url"])
-
+    for name, abbreviation, org_type, official_url in STATIC_MINISTRIES:
+        existing = db.query(Ministry).filter(Ministry.name == name).first()
         if existing:
-            existing.name = org["name"]
-            existing.abbreviation = org.get("abbreviation")
-            existing.org_type = org["org_type"]
-            if official_url:
-                existing.official_url = official_url
+            existing.is_active = True
+            existing.abbreviation = abbreviation
+            existing.org_type = org_type
+            existing.official_url = official_url
         else:
-            db.add(
-                Ministry(
-                    name=org["name"],
-                    abbreviation=org.get("abbreviation"),
-                    org_type=org["org_type"],
-                    igod_url=org["igod_url"],
-                    official_url=official_url,
-                )
-            )
+            db.add(Ministry(
+                name=name,
+                abbreviation=abbreviation,
+                org_type=org_type,
+                official_url=official_url,
+                is_active=True,
+            ))
         updated += 1
 
     db.commit()
-    logger.info("Refreshed %s organizations from igod.gov.in", updated)
+    logger.info("Synced %s ministries from static list", updated)
     return updated
