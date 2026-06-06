@@ -39,8 +39,8 @@ def job_scan_ministries(ministry_ids: list[int]) -> None:
 
     try:
         for index, ministry in enumerate(ministries, start=1):
-            pct = int((index / max(total, 1)) * 100)
-            scan_state.set_step(f"Scanning: {ministry.name}", pct, index)
+            pct = int(((index - 1) / max(total, 1)) * 100)
+            scan_state.set_step(f"Scanning: {ministry.name}", pct, index - 1)
             logger.info("[%s/%s] Scanning %s", index, total, ministry.name)
 
             try:
