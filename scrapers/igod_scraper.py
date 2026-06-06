@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session
 
 from database.models import Ministry
-from scrapers.utils import clean_name, extract_abbreviation, normalize_url
+from scrapers.utils import KNOWN_CIRCULAR_PAGES, clean_name, extract_abbreviation, normalize_url
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +86,25 @@ def discover_organizations() -> list[dict[str, str]]:
     return _parse_categories_page(_fetch_html(CATEGORIES_URL))
 
 
+def _has_known_circular_url(name: str) -> bool:
+    name_lower = name.lower()
+    return any(key.lower() in name_lower for key in KNOWN_CIRCULAR_PAGES)
+
+
 def refresh_ministries(db: Session) -> int:
     organizations = discover_organizations()
-    updated = 0
 
+    # Deactivate any existing ministries that no longer have a known circular URL
+    for ministry in db.query(Ministry).filter(Ministry.is_active.is_(True)).all():
+        if not _has_known_circular_url(ministry.name):
+            ministry.is_active = False
+    db.commit()
+
+    updated = 0
     for org in organizations:
+        if not _has_known_circular_url(org["name"]):
+            continue
+
         existing = db.query(Ministry).filter(Ministry.igod_url == org["igod_url"]).first()
         official_url = org.get("official_url") or _extract_official_url_from_detail(org["igod_url"])
 
