@@ -199,7 +199,7 @@ def _site_reachable(url: str) -> bool:
     try:
         session = _make_session()
         resp = session.head(url, timeout=(5, 5), verify=False, allow_redirects=True)
-        return resp.status_code < 500
+        return resp.status_code < 400
     except Exception:
         return False
 
