@@ -769,14 +769,17 @@
           feedScanBtn.textContent = 'Scan this ministry';
           if (viewingMinistryId) loadMinistryCirculars(viewingMinistryId);
           setTimeout(() => { panel.classList.remove('visible'); dossier.classList.remove('is-done'); }, 5000);
-        } else if (data.status === 'failed') {
-          stepEl.textContent = 'Scan failed: ' + (data.message || 'unknown error');
+        } else {
+          // failed, idle, timed-out, or server restarted mid-scan
+          const msg = data.status === 'failed' ? (data.message || 'Scan failed') : 'Scan interrupted — server restarted';
+          stepEl.textContent = msg;
           dossier.classList.add('is-failed');
           scanning = false;
           feedScanBtn.disabled = false;
           scanBtn.disabled = getSelectedIds().length === 0;
           scanBtn.textContent = 'Scan Selected';
           feedScanBtn.textContent = 'Scan this ministry';
+          setTimeout(() => { panel.classList.remove('visible'); dossier.classList.remove('is-failed'); }, 4000);
         }
       } catch (e) {
         stepEl.textContent = 'Connection lost — check server';
