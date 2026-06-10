@@ -16,6 +16,9 @@ except ImportError:
 
 _PLAYWRIGHT_AVAILABLE = False  # Disabled: Chromium uses 6+ GB RAM, incompatible with this VPS
 
+# Domains that reliably time out from this VPS — skip them immediately.
+_BLOCKED_DOMAINS: set[str] = {"www.mod.gov.in", "mod.gov.in"}
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from database.models import Circular, Ministry
@@ -211,6 +214,11 @@ def _bs4_fetch_text(url: str) -> tuple[str, str]:
 
 def _site_reachable(url: str) -> bool:
     """Quick 5-second HEAD check to see if the domain responds at all."""
+    from urllib.parse import urlparse
+    domain = urlparse(url).netloc
+    if domain in _BLOCKED_DOMAINS:
+        logger.warning("Skipping blocked domain: %s", domain)
+        return False
     try:
         session = _make_session()
         resp = session.head(url, timeout=(5, 5), verify=False, allow_redirects=True)
@@ -349,10 +357,12 @@ def _save_scraped_circular(
 
 def _known_circular_url(ministry_name: str) -> str | None:
     name_lower = ministry_name.lower()
+    best: tuple[int, str] | None = None  # (key_length, url)
     for key, url in KNOWN_CIRCULAR_PAGES.items():
         if key.lower() in name_lower:
-            return url
-    return None
+            if best is None or len(key) > best[0]:
+                best = (len(key), url)
+    return best[1] if best else None
 
 
 def scrape_ministry_circulars(db: Session, ministry: Ministry) -> int:
@@ -361,6 +371,10 @@ def scrape_ministry_circulars(db: Session, ministry: Ministry) -> int:
 
     known = _known_circular_url(ministry.name)
     if known:
+        from urllib.parse import urlparse as _up
+        if _up(known).netloc in _BLOCKED_DOMAINS:
+            logger.warning("%s: known URL is on blocked domain, skipping", ministry.name)
+            return 0
         listing_urls = [known]
         logger.info("%s: using known circular page %s", ministry.name, known)
     else:

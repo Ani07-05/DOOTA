@@ -51,12 +51,14 @@ KNOWN_CIRCULAR_PAGES: dict[str, str] = {
         "https://www.dpe.gov.in/documents/orders-and-notices",
 
     # ── Defence ───────────────────────────────────────────────────────────────
+    "Department of Defence Production":
+        "https://www.ddpmod.gov.in/documents/orders-and-notices",
+    "Defence Research and Development":
+        "https://www.drdo.gov.in/whats-new/press-release",
     "Department of Defence":
         "https://www.mod.gov.in/dod/oms_orders",
     "Ministry of Defence":
         "https://www.mod.gov.in/dod/oms_orders",
-    "Defence Production":
-        "https://www.ddpmod.gov.in/documents/orders-and-notices",
 
     # ── Education ─────────────────────────────────────────────────────────────
     "Higher Education":
