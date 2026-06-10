@@ -35,9 +35,24 @@ def _clear_stale_scans() -> None:
         db.close()
 
 
+def _seed_ministries_if_empty() -> None:
+    from database.models import Ministry
+    from scrapers.igod_scraper import refresh_ministries
+
+    db = SessionLocal()
+    try:
+        count = db.query(Ministry).count()
+        if count == 0:
+            seeded = refresh_ministries(db)
+            logger.info("Fresh database — seeded %s ministries", seeded)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    _seed_ministries_if_empty()
     _clear_stale_scans()
     logger.info("Doota ready — manual scan only, no automation")
     yield

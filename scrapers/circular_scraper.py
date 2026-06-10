@@ -14,11 +14,7 @@ try:
 except ImportError:
     _CURL_AVAILABLE = False
 
-try:
-    from playwright.sync_api import sync_playwright
-    _PLAYWRIGHT_AVAILABLE = True
-except ImportError:
-    _PLAYWRIGHT_AVAILABLE = False
+_PLAYWRIGHT_AVAILABLE = False  # Disabled: Chromium uses 6+ GB RAM, incompatible with this VPS
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -161,36 +157,55 @@ def _bs4_fetch_links(url: str) -> list[str]:
             anchor_text = tag.get_text(strip=True).lower()
             if _is_circular_candidate(full) or any(w in anchor_text for w in _CIRCULAR_ANCHOR_WORDS):
                 links.append(full)
-        result = list(dict.fromkeys(links))
-        if not result and _PLAYWRIGHT_AVAILABLE:
-            logger.info("BS4 got no links (JS SPA?), trying Playwright: %s", url)
-            return _playwright_fetch_links(url)
-        return result
+        return list(dict.fromkeys(links))
     except Exception as exc:
         logger.warning("Link fetch failed for %s: %s", url, exc)
-        if _PLAYWRIGHT_AVAILABLE:
-            return _playwright_fetch_links(url)
         return []
 
 
-def _bs4_fetch_text(url: str) -> tuple[str, str]:
-    """Return (plain_text, resolved_url). Returns ('', url) on failure."""
+def _bs4_fetch_links_with_text(url: str) -> tuple[list[tuple[str, str]], str]:
+    """Fetch a listing page and return [(href, anchor_text), ...] plus resolved_url."""
     try:
         session = _make_session()
         resp = _get(session, url)
         resp.raise_for_status()
+        # Reject binary/PDF responses
+        ct = resp.headers.get("content-type", "")
+        if "pdf" in ct or resp.content[:4] == b"%PDF":
+            return [], url
+        soup = BeautifulSoup(resp.text, "html.parser")
+        results = []
+        for tag in soup.find_all("a", href=True):
+            href = tag["href"].strip()
+            if not href or href.startswith(("javascript:", "#", "mailto:")):
+                continue
+            full = urljoin(resp.url, href)
+            anchor = tag.get_text(strip=True)
+            anchor_lower = anchor.lower()
+            if _is_circular_candidate(full) or any(w in anchor_lower for w in _CIRCULAR_ANCHOR_WORDS):
+                results.append((full, anchor))
+        return list({r[0]: r for r in results}.values()), resp.url
+    except Exception as exc:
+        logger.warning("Link+text fetch failed for %s: %s", url, exc)
+        return [], url
+
+
+def _bs4_fetch_text(url: str) -> tuple[str, str]:
+    """Return (plain_text, resolved_url). Returns ('', url) on failure. Skips PDFs."""
+    try:
+        session = _make_session()
+        resp = _get(session, url)
+        resp.raise_for_status()
+        ct = resp.headers.get("content-type", "")
+        if "pdf" in ct or resp.content[:4] == b"%PDF":
+            return "", url
         soup = BeautifulSoup(resp.text, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "header"]):
             tag.decompose()
         text = soup.get_text("\n", strip=True)[:20000]
-        if not text.strip() and _PLAYWRIGHT_AVAILABLE:
-            logger.info("BS4 got empty text (JS SPA?), trying Playwright: %s", url)
-            return _playwright_fetch_text(url)
         return text, resp.url
     except Exception as exc:
         logger.warning("Text fetch failed for %s: %s", url, exc)
-        if _PLAYWRIGHT_AVAILABLE:
-            return _playwright_fetch_text(url)
         return "", url
 
 
