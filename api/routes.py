@@ -1,7 +1,9 @@
+import asyncio
 import json
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session, joinedload
@@ -21,6 +23,35 @@ class ScanRequest(BaseModel):
 @router.get("/progress")
 def get_scan_progress():
     return scan_state.get_progress()
+
+
+@router.get("/scan/stream")
+async def scan_log_stream(offset: int = 0):
+    async def generator():
+        sent = offset
+        idle_ticks = 0
+        while True:
+            lines, total = scan_state.get_logs_from(sent)
+            for line in lines:
+                safe = line.replace("\n", " ").replace("\r", "")
+                yield f"data: {safe}\n\n"
+            sent += len(lines)
+
+            if scan_state.is_running():
+                idle_ticks = 0
+            else:
+                idle_ticks += 1
+                if idle_ticks >= 6:  # 3 s of silence after scan ends
+                    yield "event: done\ndata: \n\n"
+                    return
+
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/scan/progress")

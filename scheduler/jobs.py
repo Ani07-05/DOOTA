@@ -34,6 +34,7 @@ def job_scan_ministries(ministry_ids: list[int]) -> None:
         .all()
     )
     total = len(ministries)
+    scan_state.clear_logs()
     scan_state.start(scan.id, total)
     total_new = 0
 

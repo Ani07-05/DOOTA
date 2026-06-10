@@ -186,6 +186,31 @@
       margin-top: 0.5rem; letter-spacing: 0.04em;
     }
 
+    #scanLog {
+      margin-top: 0.75rem;
+      max-height: 160px;
+      overflow-y: auto;
+      background: rgba(28,25,21,0.04);
+      border: 1px solid var(--rule);
+      padding: 0.5rem 0.65rem;
+      scrollbar-width: thin;
+      scrollbar-color: var(--rule) transparent;
+    }
+    #scanLog::-webkit-scrollbar { width: 3px; }
+    #scanLog::-webkit-scrollbar-thumb { background: var(--rule); }
+
+    .log-line {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.58rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: var(--ink-faint);
+    }
+    .log-line.lvl-info    { color: var(--ink-muted); }
+    .log-line.lvl-warning { color: var(--saffron); }
+    .log-line.lvl-error   { color: var(--stamp); }
+
     /* ── Main layout ──────────────────────────────────── */
     .layout {
       display: grid;
@@ -557,6 +582,7 @@
           <div id="scanBar" class="meter-fill"></div>
         </div>
         <p id="scanMeta"></p>
+        <div id="scanLog"></div>
       </div>
     </div>
 
@@ -645,10 +671,35 @@
     const recentLimit   = {{ recent_limit }};
 
     let pollTimer = null;
+    let logSource = null;
     let viewingMinistryId   = null;
     let viewingMinistryName = '';
     let viewingMinistryUrl  = '';
     let scanning = false;
+
+    // ── Log stream ───────────────────────────────────────
+    const logEl = document.getElementById('scanLog');
+
+    function appendLog(text) {
+      const div = document.createElement('div');
+      div.className = 'log-line';
+      const t = text.trimEnd();
+      if (t.startsWith('WARNING')) div.classList.add('lvl-warning');
+      else if (t.startsWith('ERROR') || t.startsWith('CRITICAL')) div.classList.add('lvl-error');
+      else div.classList.add('lvl-info');
+      div.textContent = t;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function startLogStream() {
+      if (logSource) { logSource.close(); logSource = null; }
+      logEl.innerHTML = '';
+      logSource = new EventSource('/api/scan/stream');
+      logSource.onmessage = e => { if (e.data) appendLog(e.data); };
+      logSource.addEventListener('done', () => { logSource.close(); logSource = null; });
+      logSource.onerror = () => { logSource.close(); logSource = null; };
+    }
 
     // ── Ministry list interactions ───────────────────────
     function getChecks() { return [...document.querySelectorAll('.ministry-check')]; }
@@ -734,6 +785,8 @@
     document.getElementById('closePanel').addEventListener('click', () => {
       panel.classList.remove('visible');
       dossier.classList.remove('is-done', 'is-failed');
+      if (logSource) { logSource.close(); logSource = null; }
+      logEl.innerHTML = '';
     });
 
     function showProgress(data) {
@@ -806,6 +859,7 @@
         const data = await res.json();
         if (data.status === 'already_running') { stepEl.textContent = data.message; }
         if (!res.ok) throw new Error(data.detail || data.message || 'Scan failed');
+        startLogStream();
         pollProgress();
       } catch (e) {
         stepEl.textContent = 'Failed to start: ' + e.message;

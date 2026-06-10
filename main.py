@@ -12,6 +12,9 @@ from database.session import SessionLocal, init_db
 logging.basicConfig(level=settings.log_level)
 logger = logging.getLogger(__name__)
 
+from scheduler.log_handler import ScanLogHandler as _ScanLogHandler
+logging.getLogger().addHandler(_ScanLogHandler())
+
 templates = Jinja2Templates(directory="templates")
 
 

@@ -1,10 +1,13 @@
 import threading
 import time
+from collections import deque
 
 
 class ScanState:
     def __init__(self):
         self._lock = threading.Lock()
+        self._log_lock = threading.Lock()
+        self._logs: deque[str] = deque(maxlen=500)
         self._data: dict = {
             "running": False,
             "status": "idle",
@@ -68,6 +71,21 @@ class ScanState:
             if status == "completed":
                 self._data["progress"] = 100
                 self._data["step"] = "Complete"
+
+    # ── Log buffer ────────────────────────────────────────
+
+    def push_log(self, line: str) -> None:
+        with self._log_lock:
+            self._logs.append(line)
+
+    def get_logs_from(self, offset: int) -> tuple[list[str], int]:
+        with self._log_lock:
+            buf = list(self._logs)
+        return buf[offset:], len(buf)
+
+    def clear_logs(self) -> None:
+        with self._log_lock:
+            self._logs.clear()
 
 
 scan_state = ScanState()

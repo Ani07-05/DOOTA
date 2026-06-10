@@ -1,4 +1,5 @@
 import threading
+from collections import deque
 from dataclasses import asdict, dataclass, field
 
 
@@ -17,6 +18,9 @@ class ScanProgress:
 
 _lock = threading.Lock()
 _state = ScanProgress()
+
+_log_lock = threading.Lock()
+_log_buffer: deque[str] = deque(maxlen=500)
 
 
 def get_progress() -> dict:
@@ -72,3 +76,21 @@ def finish(status: str, message: str) -> None:
 def is_running() -> bool:
     with _lock:
         return _state.running
+
+
+# ── Log buffer ────────────────────────────────────────────
+
+def push_log(line: str) -> None:
+    with _log_lock:
+        _log_buffer.append(line)
+
+
+def get_logs_from(offset: int) -> tuple[list[str], int]:
+    with _log_lock:
+        buf = list(_log_buffer)
+    return buf[offset:], len(buf)
+
+
+def clear_logs() -> None:
+    with _log_lock:
+        _log_buffer.clear()
